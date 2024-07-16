@@ -32,7 +32,7 @@ const verifyToken = async (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if(err){
-      console.log(err, 'error')
+      console.log(err.message, 'error')
       return res.status(403).send({message: "unauthorized"})
     }
     req.decoded = decoded
@@ -53,13 +53,14 @@ async function run() {
 
     app.post('/signup', async(req, res) => {
         const { name, email, phone, pin, role } = req.body;
-        console.log(req.body);
-        const user = { name, email, phone, role, status: 'pending' };;
+        
+
+        const user = { name, email, phone, role, status: 'pending', balance: 0 };
         try {
             const existingUser = await users.findOne({ role, $or: [{ email }, { phone }] });
             
             if (existingUser) {
-                return res.json({ error: 'User already exists' });
+                return res.send({ error: 'User already exists' });
             }
 
             const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
@@ -72,9 +73,9 @@ async function run() {
 
 
             const token = jwt.sign({ email, phone, role, status: 'pending' }, process.env.JWT_SECRET, { expiresIn: '1h' });
-            res.json({ token });
+            res.send({ token, email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status, balance: user.balance });
         } catch (error) {
-           res.json({ error: error.message }); 
+           res.send({ error: error.message }); 
         }
     })
 
@@ -83,9 +84,10 @@ async function run() {
     app.get('/auth', verifyToken, async (req, res) => {
       const user = req.decoded
 
+      
       try {
         const data = await users.findOne({email: user.email, phone: user.phone, role: user.role})
-        res.send({email: data.email, phone: data.phone, role: user.role, name: user.name, status: user.status})
+        res.send({email: data.email, phone: data.phone, role: data.role, name: data.name, status: data.status, balance: data.balance})
       } catch (error) {
         res.status(404).send({message: "User not found"})
       }
@@ -94,7 +96,7 @@ async function run() {
 
     app.post('/login', async (req, res) => {
       const {text, pin} = req.body
-      console.log(req.body)
+      
       try {
         if(!text ||!pin){
           return res.status(400).send({error: 'Missing credentials'})
@@ -109,11 +111,67 @@ async function run() {
           return res.status(404).send({error: 'Invalid credentials'})
         }
         const token = jwt.sign({ email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.json({ token });
+        res.send({ token });
         } catch (error) {
           res.send(error.message)
         }
 
+    })
+
+    app.get('/manage_user', verifyToken, async(req, res) => {
+      const decode = req.decoded
+      const {search} = req.query
+
+      console.log(search)
+      if(decode.role!== 'admin'){
+        return res.status(403).send({message: "unauthorized"})
+      }
+
+      try {
+        const searchPattern = new RegExp(search, 'i');
+
+      const usersData = await users.find({
+        $or: [
+          { email: searchPattern },
+          { phone: searchPattern },
+          { name: searchPattern }
+        ]
+      }).toArray();
+      
+        res.send(usersData)
+      } catch (error) {
+        res.send({message: "User not found"})
+      }
+
+    })
+
+    app.post('/manage_user', verifyToken, async (req, res) => {
+      const decode = req.decoded
+      if(decode.role!== 'admin'){
+        return res.status(403).send({message: "unauthorized"})
+      }
+      const {email, role, status} = req.body
+      console.log(req.body)
+      try {
+        if(status === 'accept'){
+          let balance = 0
+
+          if(role === 'user'){
+            balance = 40
+          }else if(role === 'agent'){
+            balance = 10000
+          }
+
+          const res = await users.updateOne({email, role}, { $set:  {status: 'active', balance} })
+          console.log(res, 'update')
+          return res.send({message: "User Activated"})
+        }
+        const res = await users.updateOne({email, role}, { $set:  {status} })
+        console.log(res, 'update')
+        res.send({message: "User updated"})
+      } catch (error) {
+        res.send(error.message)
+      }
     })
 
 
