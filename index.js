@@ -24,8 +24,8 @@ const client = new MongoClient(uri, {
 });
 
 const verifyToken = async (req, res, next) => {
-  const token = req.headers.authorization.split(" ")[1];
-  
+  const token = req.headers.authorization?.split(" ")[1];
+  console.log(token)
   if(!token){
     return res.status(401).send({message: "unauthorized"})
   }
@@ -33,7 +33,7 @@ const verifyToken = async (req, res, next) => {
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if(err){
       console.log(err, 'error')
-      return res.status(401).send({message: "unauthorized"})
+      return res.status(403).send({message: "unauthorized"})
     }
     req.decoded = decoded
     next()
@@ -90,6 +90,30 @@ async function run() {
         res.status(404).send({message: "User not found"})
       }
      
+    })
+
+    app.post('/login', async (req, res) => {
+      const {text, pin} = req.body
+      console.log(req.body)
+      try {
+        if(!text ||!pin){
+          return res.status(400).send({error: 'Missing credentials'})
+        }
+        const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+        hmac.update(pin)
+        const pin_hash = hmac.digest('hex');
+        
+        const user = await users.findOne({ $or: [{email: text}, { phone: text}], pin: pin_hash });
+        
+        if(!user){
+          return res.status(404).send({error: 'Invalid credentials'})
+        }
+        const token = jwt.sign({ email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token });
+        } catch (error) {
+          res.send(error.message)
+        }
+
     })
 
 
