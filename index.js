@@ -207,11 +207,13 @@ async function run() {
           return res.status(400).send({message: "User not active"})
         }
 
-        const result = await transaction.insertOne({
+        await transaction.insertOne({
           requestName: user.name,
           requestEmail: user.email,
           requestPhone: user.phone,
           amount: Number(amount),
+          type: 'cash_in',
+          deducted: 0,
           date: new Date().getFullYear() + '-' + (new Date().getMonth() + 1) + '-' + new Date().getDate(),
           status: 'pending'
         })
