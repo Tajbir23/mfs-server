@@ -63,7 +63,7 @@ async function run() {
             const existingUser = await users.findOne({ role, $or: [{ email }, { phone }] });
             
             if (existingUser) {
-                return res.status(400).send({ error: 'User already exists' });
+                return res.status(400).send({ error: 'Phone or email already exists' });
             }
 
             const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
@@ -349,6 +349,68 @@ async function run() {
       } catch (error) {
         res.send(error.message)
       }
+    })
+
+
+    app.post('/send_money', verifyToken, async (req, res) => {
+      const {email, phone, role} = req.decoded
+      const {amount, pin, receiver} = req.body
+
+      if(!amount){
+        return res.status(400).send({message: "Missing amount"})
+      }
+
+      if(role !== 'user'){
+        return res.status(402).send({message: "Must be  a user"})
+      }
+
+      try {
+        const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+        hmac.update(pin)
+        const pin_hash = hmac.digest('hex');
+
+        const user = await users.findOne({email, phone, pin: pin_hash})
+
+        if(!user){
+          return res.status(400).send({message: "Invalid pin"})
+        }
+
+        if(user.status!== 'active'){
+          return res.status(400).send({message: "User not active"})
+        }
+        if(amount < 50){
+          return res.status(400).send({message: "Amount must be less than 50tk"})
+        }
+
+        let deducted = 0
+
+        if(amount >= 100){
+          deducted = 5
+        }
+
+        let totalDeducted = deducted + amount
+
+        await users.updateOne({phone: receiver, role: 'user'}, {$inc : {balance: Number(amount)} })
+
+        await users.updateOne({email : email, phone : phone, role : role}, {$inc : {balance: -Number(totalDeducted)}})
+
+        await transaction.insertOne({
+          requestName: user.name,
+          requestEmail: user.email,
+          requestPhone: user.phone,
+          amount: Number(amount),
+          receiver,
+          type: 'send_money',
+          deducted,
+          date: new Date().getFullYear() + '-' + (new Date().getMonth() + 1) + '-' + new Date().getDate(),
+          status: 'success'
+        })
+
+        res.send({message: "Send money successful"})
+      } catch (error) {
+        res.send(error.message)
+      }
+      
     })
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
