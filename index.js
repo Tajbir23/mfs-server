@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express =  require('express');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const crypto = require('crypto')
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -11,8 +11,9 @@ app.use(express.json());
 
 
 
-// const uri = "mongodb+srv://tajbir23:<password>@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
+// const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
 const uri = "mongodb://localhost:27017"
+// const uri = "mongodb://tajbir:123@localhost:27017"
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -42,7 +43,9 @@ const verifyToken = async (req, res, next) => {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
+    console.log('database is connecting')
     await client.connect();
+    console.log('database is connected')
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
     
@@ -60,7 +63,7 @@ async function run() {
             const existingUser = await users.findOne({ role, $or: [{ email }, { phone }] });
             
             if (existingUser) {
-                return res.send({ error: 'User already exists' });
+                return res.status(400).send({ error: 'User already exists' });
             }
 
             const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
@@ -89,7 +92,7 @@ async function run() {
         const data = await users.findOne({email: user.email, phone: user.phone, role: user.role})
         res.send({email: data.email, phone: data.phone, role: data.role, name: data.name, status: data.status, balance: data.balance})
       } catch (error) {
-        res.status(404).send({message: "User not found"})
+        res.status(403).send({message: "User not found"})
       }
      
     })
@@ -183,13 +186,21 @@ async function run() {
 
 
     app.post('/request_cash_in', verifyToken, async (req, res) => {
-      const {email, phone} = req.decoded
+      const {email, phone, role} = req.decoded
       const {amount} = req.body
+
+      if(!amount){
+        return res.status(400).send({message: "Missing amount"})
+      }
+
+      if(role!== 'user'){
+        return res.status(402).send({message: "Must be  a user"})
+      }
 
       try {
         const user = await users.findOne({email, phone})
         if(!user){
-          return res.status(404).send({message: "User not found"})
+          return res.status(403).send({message: "User not found"})
         }
 
         if(user.status!== 'active'){
@@ -197,9 +208,11 @@ async function run() {
         }
 
         const result = await transaction.insertOne({
+          requestName: user.name,
           requestEmail: user.email,
           requestPhone: user.phone,
-          amount,
+          amount: Number(amount),
+          date: new Date().getFullYear() + '-' + (new Date().getMonth() + 1) + '-' + new Date().getDate(),
           status: 'pending'
         })
 
@@ -209,6 +222,54 @@ async function run() {
       }
     })
 
+
+    app.get("/cash_in_requests", verifyToken, async (req, res) => {
+      const {role} = req.decoded
+      
+      if(role!== 'agent'){
+        return res.status(403).send({message: "unauthorized"})
+      }
+      
+      try {
+        const requests = await transaction.find({ status: "pending" }).toArray();
+        res.send(requests)
+      } catch (error) {
+        res.send(error.message)
+      }
+    })
+
+    app.post("/manage_cash_in_request", verifyToken, async (req, res) => {
+      const {role, email, phone, status: agentStatus} = req.decoded
+      const {id, userPhone, userEmail, status, amount} = req.body
+      // const data = req.body
+
+      if(role!== 'agent' || agentStatus!== 'active'){
+        return res.status(403).send({message: "unauthorized"})
+      }
+
+      try {
+        const result = await users.findOne({email, phone})
+        if(result.balance < amount){
+          return res.status(400).send({message: "Insufficient balance"})
+        }
+        if(!result){
+          return res.status(403).send({message: "User not found"})
+        }
+
+        await transaction.updateOne({ _id: new ObjectId(id), status: 'pending' }, { $set: { status: status } })
+
+        if(status === 'accept'){
+          await users.updateOne({email: userEmail, phone: userPhone}, { $inc: { balance: Number(amount) } })
+          await users.updateOne({email, phone}, { $inc: { balance: -Number(amount) } })
+
+          return res.send({message: "Cash in accepted"})
+        }else{
+          return res.send({message: "Cash in rejected"})
+        }
+      } catch (error) {
+        res.send(error.message)
+      }
+    })
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
