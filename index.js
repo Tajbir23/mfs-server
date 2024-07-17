@@ -25,14 +25,13 @@ const client = new MongoClient(uri, {
 
 const verifyToken = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
-  console.log(token)
+  
   if(!token){
     return res.status(401).send({message: "unauthorized"})
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if(err){
-      console.log(err.message, 'error')
       return res.status(403).send({message: "unauthorized"})
     }
     req.decoded = decoded
@@ -50,6 +49,7 @@ async function run() {
     const db = client.db("instapay");
 
     const users = db.collection("users");
+    const transaction = db.collection("transaction");
 
     app.post('/signup', async(req, res) => {
         const { name, email, phone, pin, role } = req.body;
@@ -69,11 +69,11 @@ async function run() {
             user.pin = pin_hash;
 
             const result = await users.insertOne(user);
-            console.log(result);
 
 
-            const token = jwt.sign({ email, phone, role, status: 'pending' }, process.env.JWT_SECRET, { expiresIn: '1h' });
-            res.send({ token, email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status, balance: user.balance });
+            // const token = jwt.sign({ email, phone, role, status: 'pending' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            // res.send({ token, email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status, balance: user.balance });
+            res.send({ message: "Registration successful" });
         } catch (error) {
            res.send({ error: error.message }); 
         }
@@ -110,6 +110,14 @@ async function run() {
         if(!user){
           return res.status(404).send({error: 'Invalid credentials'})
         }
+
+        if(user.status === 'pending'){
+          return res.status(400).send({error: 'Your account is not active'})
+        }
+        if(user.status === 'block'){
+          return res.status(400).send({error: 'You have been blocked'})
+        }
+
         const token = jwt.sign({ email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status }, process.env.JWT_SECRET, { expiresIn: '1h' });
         res.send({ token });
         } catch (error) {
@@ -122,7 +130,6 @@ async function run() {
       const decode = req.decoded
       const {search} = req.query
 
-      console.log(search)
       if(decode.role!== 'admin'){
         return res.status(403).send({message: "unauthorized"})
       }
@@ -151,7 +158,7 @@ async function run() {
         return res.status(403).send({message: "unauthorized"})
       }
       const {email, role, status} = req.body
-      console.log(req.body)
+      
       try {
         if(status === 'accept'){
           let balance = 0
@@ -163,12 +170,40 @@ async function run() {
           }
 
           const res = await users.updateOne({email, role}, { $set:  {status: 'active', balance} })
-          console.log(res, 'update')
+          
           return res.send({message: "User Activated"})
         }
         const res = await users.updateOne({email, role}, { $set:  {status} })
-        console.log(res, 'update')
+        
         res.send({message: "User updated"})
+      } catch (error) {
+        res.send(error.message)
+      }
+    })
+
+
+    app.post('/request_cash_in', verifyToken, async (req, res) => {
+      const {email, phone} = req.decoded
+      const {amount} = req.body
+
+      try {
+        const user = await users.findOne({email, phone})
+        if(!user){
+          return res.status(404).send({message: "User not found"})
+        }
+
+        if(user.status!== 'active'){
+          return res.status(400).send({message: "User not active"})
+        }
+
+        const result = await transaction.insertOne({
+          requestEmail: user.email,
+          requestPhone: user.phone,
+          amount,
+          status: 'pending'
+        })
+
+        res.send({message: "Request successful"})
       } catch (error) {
         res.send(error.message)
       }
