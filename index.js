@@ -413,6 +413,24 @@ async function run() {
       
     })
 
+    app.get('/transaction', verifyToken, async(req, res) => {
+      const {email, phone, role} = req.decoded
+      try {
+        let data = 0
+
+        if(role === "user"){
+          data = 10
+        }else if(role === "agent"){
+          data = 20
+        }
+        const result = await transaction.find({requestEmail: email, requestPhone: phone}).limit(data).toArray()
+        
+        res.send(result)
+      } catch (error) {
+        return res.send(error)
+      }
+    })
+
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
