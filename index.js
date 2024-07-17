@@ -184,7 +184,7 @@ async function run() {
       }
     })
 
-
+    // Post data to database for request cash in
     app.post('/request_cash_in', verifyToken, async (req, res) => {
       const {email, phone, role} = req.decoded
       const {amount} = req.body
@@ -218,13 +218,83 @@ async function run() {
           status: 'pending'
         })
 
-        res.send({message: "Request successful"})
+        res.send({message: "Cash In request successful"})
       } catch (error) {
         res.send(error.message)
       }
     })
 
 
+    // Post data to database for request cash out
+
+    app.post('/request_cash_out', verifyToken, async (req, res) => {
+      const {email, phone, role} = req.decoded
+      const {amount, pin, agent} = req.body
+      
+      if(!amount){
+        return res.status(400).send({message: "Missing amount"})
+      }
+      
+      if(role!== 'user'){
+        return res.status(402).send({message: "Must be  a user"})
+      }
+      
+      try {
+        const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+        hmac.update(pin)
+        const pin_hash = hmac.digest('hex');
+
+        const user = await users.findOne({email, phone, pin: pin_hash})
+        
+        if(!user){
+          return res.status(400).send({message: "Invalid pin"})
+        }
+
+        if(user.status!== 'active'){
+          return res.status(400).send({message: "User not active"})
+        }
+
+        if(user.balance < amount){
+          return res.status(400).send({message: "Insufficient balance"})
+        }
+
+        const agentInfo = await users.findOne({phone: agent, role: 'agent'})
+        
+        if(!agentInfo){
+          return res.status(400).send({message: "Invalid number"})
+        }
+
+        if(agentInfo.status === 'active' && agentInfo.role === 'agent'){
+          const res = await users.updateOne({email: agentInfo.email, phone: agentInfo.phone}, { $inc: {balance: Number(amount)}  })
+        }else{
+          return res.status(400).send({message: "Agent not active or not an agent"})
+        }
+
+        let deducted = 0.015 * Number(amount)
+
+        let totalDeducted = Number(amount) - Number(deducted)
+
+        await users.updateOne({email, phone}, { $inc: {balance: -Number(totalDeducted)}  })
+
+        await transaction.insertOne({
+          requestName: user.name,
+          requestEmail: user.email,
+          requestPhone: user.phone,
+          amount: Number(amount),
+          agent: agentInfo.phone,
+          type: 'cash_out',
+          deducted,
+          date: new Date().getFullYear() + '-' + (new Date().getMonth() + 1) + '-' + new Date().getDate(),
+          status: 'success'
+        })
+        res.send({message: "Cash Out request successful"})
+      } catch (error) {
+        res.send(error.message)
+      }
+    })
+
+
+    // Get all cash in requests
     app.get("/cash_in_requests", verifyToken, async (req, res) => {
       const {role} = req.decoded
       
@@ -233,7 +303,7 @@ async function run() {
       }
       
       try {
-        const requests = await transaction.find({ status: "pending" }).toArray();
+        const requests = await transaction.find({ status: "pending", type: 'cash_in' }).toArray();
         res.send(requests)
       } catch (error) {
         res.send(error.message)
@@ -242,7 +312,7 @@ async function run() {
 
     app.post("/manage_cash_in_request", verifyToken, async (req, res) => {
       const {role, email, phone, status: agentStatus} = req.decoded
-      const {id, userPhone, userEmail, status, amount} = req.body
+      const {id, userPhone, userEmail, status, amount, type} = req.body
       // const data = req.body
 
       if(role!== 'agent' || agentStatus!== 'active'){
@@ -251,23 +321,31 @@ async function run() {
 
       try {
         const result = await users.findOne({email, phone})
-        if(result.balance < amount){
-          return res.status(400).send({message: "Insufficient balance"})
-        }
+        
         if(!result){
           return res.status(403).send({message: "User not found"})
         }
 
-        await transaction.updateOne({ _id: new ObjectId(id), status: 'pending' }, { $set: { status: status } })
-
-        if(status === 'accept'){
-          await users.updateOne({email: userEmail, phone: userPhone}, { $inc: { balance: Number(amount) } })
-          await users.updateOne({email, phone}, { $inc: { balance: -Number(amount) } })
-
-          return res.send({message: "Cash in accepted"})
-        }else{
-          return res.send({message: "Cash in rejected"})
+        // Cash in management start
+        if(type === 'cash_in'){
+          if(result.balance < amount){
+            return res.status(400).send({message: "Insufficient balance"})
+          }
+  
+          await transaction.updateOne({ _id: new ObjectId(id), status: 'pending' }, { $set: { status: status, agent: phone } })
+  
+          if(status === 'accept'){
+            await users.updateOne({email: userEmail, phone: userPhone}, { $inc: { balance: Number(amount) } })
+            await users.updateOne({email, phone}, { $inc: { balance: -Number(amount) } })
+  
+            return res.send({message: "Cash in accepted"})
+          }else{
+            return res.send({message: "Cash in rejected"})
+          }
         }
+        // Cash in management end
+
+
       } catch (error) {
         res.send(error.message)
       }
