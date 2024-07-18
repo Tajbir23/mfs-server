@@ -431,6 +431,72 @@ async function run() {
       }
     })
 
+
+    app.get('/system_monitoring', verifyToken, async(req,res) => {
+      const {role} = req.decoded
+      if(role !== 'admin'){
+        return res.status(403).send({message: "unauthorized"})
+      }
+
+      try {
+        const totalUser = await users.countDocuments({role: 'user'})
+        const totalAgent = await users.countDocuments({role: 'agent'})
+        const totalTransaction = await transaction.countDocuments()
+        const totalCashIn = await transaction.countDocuments({type: 'cash_in'})
+        const totalCashOut = await transaction.countDocuments({type: 'cash_out'})
+        const totalSendMoney = await transaction.countDocuments({type: 'send_money'})
+        const totalCashInRequest = await transaction.countDocuments({type: 'cash_in', status: 'pending'})
+        const totalCashOutRequest = await transaction.countDocuments({type: 'cash_out', status: 'pending'})
+        
+        const totalCashInAccept = await transaction.countDocuments({type: 'cash_in', status: 'accept'})
+        
+        const totalCashInReject = await transaction.countDocuments({type: 'cash_in', status: 'cancelled'})
+        const totalCashOutReject = await transaction.countDocuments({type: 'cash_out', status: 'cancelled'})
+
+        const totalCashOutSuccess = await transaction.countDocuments({type: 'cash_out', status: 'success'})
+        const totalSendMoneySuccess = await transaction.countDocuments({type: 'send_money', status: 'success'})
+
+        const totalAmountResult = await users.aggregate([
+          {
+            $group: {
+              _id: null,
+              balance: {$sum: "$balance"}
+            }
+          }]).toArray()
+
+          const totalAmount = totalAmountResult[0].balance
+
+          const totalDeductedResult = await transaction.aggregate([
+            {
+              $group: {
+                _id: null,
+                amount: {$sum: "$deducted"}
+              }
+            }]).toArray()
+            const totalDeducted = totalDeductedResult[0].amount
+          console.log(totalAmount)
+          res.send({
+            totalUser,
+            totalAgent,
+            totalTransaction,
+            totalCashIn,
+            totalCashOut,
+            totalSendMoney,
+            totalCashInRequest,
+            totalCashOutRequest,
+            totalCashInAccept,
+            totalCashInReject,
+            totalCashOutReject,
+            totalCashOutSuccess,
+            totalSendMoneySuccess,
+            totalAmount,
+            totalDeducted
+          })
+      } catch (error) {
+        res.send(error)
+      }
+    })
+
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
