@@ -4,10 +4,26 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const crypto = require('crypto')
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const { createServer } = require('node:http');
+
+
+
 const app = express();
+const {Server} = require('socket.io');
+
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    
+  },
+});
 
 app.use(cors());
 app.use(express.json());
+
+
 
 
 
@@ -54,6 +70,69 @@ async function run() {
     const users = db.collection("users");
     const transaction = db.collection("transaction");
 
+
+    const getSystemMonitorData = async() => {
+      try {
+        const totalUser = await users.countDocuments({role: 'user'})
+        const totalAgent = await users.countDocuments({role: 'agent'})
+        const totalTransaction = await transaction.countDocuments()
+        const totalCashIn = await transaction.countDocuments({type: 'cash_in'})
+        const totalCashOut = await transaction.countDocuments({type: 'cash_out'})
+        const totalSendMoney = await transaction.countDocuments({type: 'send_money'})
+        const totalCashInRequest = await transaction.countDocuments({type: 'cash_in', status: 'pending'})
+        const totalCashOutRequest = await transaction.countDocuments({type: 'cash_out', status: 'pending'})
+        
+        const totalCashInAccept = await transaction.countDocuments({type: 'cash_in', status: 'accept'})
+        
+        const totalCashInReject = await transaction.countDocuments({type: 'cash_in', status: 'cancelled'})
+        const totalCashOutReject = await transaction.countDocuments({type: 'cash_out', status: 'cancelled'})
+
+        const totalCashOutSuccess = await transaction.countDocuments({type: 'cash_out', status: 'success'})
+        const totalSendMoneySuccess = await transaction.countDocuments({type: 'send_money', status: 'success'})
+
+        const totalAmountResult = await users.aggregate([
+          {
+            $group: {
+              _id: null,
+              balance: {$sum: "$balance"}
+            }
+          }]).toArray()
+
+          const totalAmount = totalAmountResult[0].balance
+
+          const totalDeductedResult = await transaction.aggregate([
+            {
+              $group: {
+                _id: null,
+                amount: {$sum: "$deducted"}
+              }
+            }]).toArray()
+            const totalDeducted = totalDeductedResult[0].amount
+          
+            const data = {
+              totalUser,
+              totalAgent,
+              totalTransaction,
+              totalCashIn,
+              totalCashOut,
+              totalSendMoney,
+              totalCashInRequest,
+              totalCashOutRequest,
+              totalCashInAccept,
+              totalCashInReject,
+              totalCashOutReject,
+              totalCashOutSuccess,
+              totalSendMoneySuccess,
+              totalAmount,
+              totalDeducted
+            }
+          return data
+
+      } catch (error) {
+        return error
+      }
+    }
+
     app.post('/signup', async(req, res) => {
         const { name, email, phone, pin, role } = req.body;
         
@@ -73,6 +152,8 @@ async function run() {
 
             const result = await users.insertOne(user);
 
+            const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
 
             // const token = jwt.sign({ email, phone, role, status: 'pending' }, process.env.JWT_SECRET, { expiresIn: '1h' });
             // res.send({ token, email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status, balance: user.balance });
@@ -122,7 +203,7 @@ async function run() {
         }
 
         const token = jwt.sign({ email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.send({ token });
+        res.send({ token, role: user.role });
         } catch (error) {
           res.send(error.message)
         }
@@ -148,6 +229,9 @@ async function run() {
         ]
       }).toArray();
       
+      const data = await getSystemMonitorData();
+      io.emit('system_monitoring_update', data);
+
         res.send(usersData)
       } catch (error) {
         res.send({message: "User not found"})
@@ -173,10 +257,16 @@ async function run() {
           }
 
           const res = await users.updateOne({email, role}, { $set:  {status: 'active', balance} })
+
+          const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
           
           return res.send({message: "User Activated"})
         }
         const res = await users.updateOne({email, role}, { $set:  {status} })
+
+        const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
         
         res.send({message: "User updated"})
       } catch (error) {
@@ -217,6 +307,9 @@ async function run() {
           date: new Date().getFullYear() + '-' + (new Date().getMonth() + 1) + '-' + new Date().getDate(),
           status: 'pending'
         })
+
+        const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
 
         res.send({message: "Cash In request successful"})
       } catch (error) {
@@ -287,6 +380,10 @@ async function run() {
           date: new Date().getFullYear() + '-' + (new Date().getMonth() + 1) + '-' + new Date().getDate(),
           status: 'success'
         })
+
+        const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
+
         res.send({message: "Cash Out request successful"})
       } catch (error) {
         res.send(error.message)
@@ -304,6 +401,10 @@ async function run() {
       
       try {
         const requests = await transaction.find({ status: "pending", type: 'cash_in' }).toArray();
+
+        const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
+
         res.send(requests)
       } catch (error) {
         res.send(error.message)
@@ -337,9 +438,15 @@ async function run() {
           if(status === 'accept'){
             await users.updateOne({email: userEmail, phone: userPhone}, { $inc: { balance: Number(amount) } })
             await users.updateOne({email, phone}, { $inc: { balance: -Number(amount) } })
+
+            const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
   
             return res.send({message: "Cash in accepted"})
           }else{
+
+            const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
             return res.send({message: "Cash in rejected"})
           }
         }
@@ -406,6 +513,9 @@ async function run() {
           status: 'success'
         })
 
+        const data = await getSystemMonitorData();
+            io.emit('system_monitoring_update', data);
+
         res.send({message: "Send money successful"})
       } catch (error) {
         res.send(error.message)
@@ -423,13 +533,23 @@ async function run() {
         }else if(role === "agent"){
           data = 20
         }
-        const result = await transaction.find({requestEmail: email, requestPhone: phone}).limit(data).toArray()
+        if(role === "user"){
+          const result = await transaction.find({requestEmail: email, requestPhone: phone}).limit(data).toArray()
+          return res.send({result, role})
+        }else if(role === "agent"){
+          const result = await transaction.find({agent: phone}).limit(data).toArray()
+          return res.send({result, role})
+        }
         
-        res.send(result)
+        
       } catch (error) {
         return res.send(error)
       }
     })
+
+
+
+    
 
 
     app.get('/system_monitoring', verifyToken, async(req,res) => {
@@ -438,63 +558,10 @@ async function run() {
         return res.status(403).send({message: "unauthorized"})
       }
 
-      try {
-        const totalUser = await users.countDocuments({role: 'user'})
-        const totalAgent = await users.countDocuments({role: 'agent'})
-        const totalTransaction = await transaction.countDocuments()
-        const totalCashIn = await transaction.countDocuments({type: 'cash_in'})
-        const totalCashOut = await transaction.countDocuments({type: 'cash_out'})
-        const totalSendMoney = await transaction.countDocuments({type: 'send_money'})
-        const totalCashInRequest = await transaction.countDocuments({type: 'cash_in', status: 'pending'})
-        const totalCashOutRequest = await transaction.countDocuments({type: 'cash_out', status: 'pending'})
-        
-        const totalCashInAccept = await transaction.countDocuments({type: 'cash_in', status: 'accept'})
-        
-        const totalCashInReject = await transaction.countDocuments({type: 'cash_in', status: 'cancelled'})
-        const totalCashOutReject = await transaction.countDocuments({type: 'cash_out', status: 'cancelled'})
-
-        const totalCashOutSuccess = await transaction.countDocuments({type: 'cash_out', status: 'success'})
-        const totalSendMoneySuccess = await transaction.countDocuments({type: 'send_money', status: 'success'})
-
-        const totalAmountResult = await users.aggregate([
-          {
-            $group: {
-              _id: null,
-              balance: {$sum: "$balance"}
-            }
-          }]).toArray()
-
-          const totalAmount = totalAmountResult[0].balance
-
-          const totalDeductedResult = await transaction.aggregate([
-            {
-              $group: {
-                _id: null,
-                amount: {$sum: "$deducted"}
-              }
-            }]).toArray()
-            const totalDeducted = totalDeductedResult[0].amount
-          console.log(totalAmount)
-          res.send({
-            totalUser,
-            totalAgent,
-            totalTransaction,
-            totalCashIn,
-            totalCashOut,
-            totalSendMoney,
-            totalCashInRequest,
-            totalCashOutRequest,
-            totalCashInAccept,
-            totalCashInReject,
-            totalCashOutReject,
-            totalCashOutSuccess,
-            totalSendMoneySuccess,
-            totalAmount,
-            totalDeducted
-          })
-      } catch (error) {
-        res.send(error)
-      }
+      const data = await getSystemMonitorData()
+      
+      res.send(data)
+      io.emit('system_monitoring_update', data)
     })
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
@@ -506,6 +573,14 @@ async function run() {
 run().catch(console.dir);
 
 
-app.listen(process.env.PORT || 5000, () => {
+io.on('connection', (socket)=> {
+  console.log(socket)
+  console.log('connected user')
+  socket.on('disconnect', () => {
+    console.log('user disconnected')
+  });
+})
+
+server.listen(process.env.PORT || 5000, () => {
   console.log(`Server is running on port ${process.env.PORT}`);
 });
