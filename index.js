@@ -394,18 +394,22 @@ async function run() {
     // Get all cash in requests
     app.get("/cash_in_requests", verifyToken, async (req, res) => {
       const {role} = req.decoded
+      const {currentPage} = req.query
+
+      const limit = 10
+      const skip = (currentPage - 1) * limit
       
       if(role!== 'agent'){
         return res.status(403).send({message: "unauthorized"})
       }
       
       try {
-        const requests = await transaction.find({ status: "pending", type: 'cash_in' }).toArray();
-
+        const requests = await transaction.find({ status: "pending", type: 'cash_in' }).skip(skip).limit(limit).toArray();
+        const totalDocuments = await transaction.countDocuments({ status: "pending", type: 'cash_in' })
         const data = await getSystemMonitorData();
             io.emit('system_monitoring_update', data);
 
-        res.send(requests)
+        res.send({requests, totalDocuments})
       } catch (error) {
         res.send(error.message)
       }
@@ -525,6 +529,7 @@ async function run() {
 
     app.get('/transaction', verifyToken, async(req, res) => {
       const {email, phone, role} = req.decoded
+      
       try {
         let data = 0
 
