@@ -76,7 +76,7 @@ async function run() {
     const transaction = db.collection("transaction");
 
 
-    app.get('/', (req, res) => {
+    app.get('/', async(req, res) => {
       res.send('Hello World!')
     })
 
