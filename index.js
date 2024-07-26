@@ -11,24 +11,29 @@ const { createServer } = require('node:http');
 const app = express();
 const {Server} = require('socket.io');
 
+
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: ["http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     
   },
 });
 
-app.use(cors());
+app.use(cors({
+  origin: ["http://localhost:5173"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  
+}));
 app.use(express.json());
 
 
 
 
 
-// const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
-const uri = "mongodb://localhost:27017"
+const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
+// const uri = "mongodb://localhost:27017"
 // const uri = "mongodb://tajbir:123@localhost:27017"
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -70,6 +75,10 @@ async function run() {
     const users = db.collection("users");
     const transaction = db.collection("transaction");
 
+
+    app.get('/', (req, res) => {
+      res.send('Hello World!')
+    })
 
     const getSystemMonitorData = async() => {
       try {
