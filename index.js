@@ -108,6 +108,7 @@ async function run() {
           }]).toArray()
 
           const totalAmount = totalAmountResult[0].balance
+          console.log('total amount', totalAmount)
 
           const totalDeductedResult = await transaction.aggregate([
             {
