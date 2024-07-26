@@ -564,6 +564,96 @@ async function run() {
       io.emit('system_monitoring_update', data)
     })
 
+
+    app.get('/type_details/:type', verifyToken, async (req, res) => {
+      const {role} = req.decoded
+      const {type} = req.params
+      const {currentPage} = req.query
+
+      const limit = 10
+      const skip = (parseInt(currentPage) - 1) * limit
+
+
+      if(role !== "admin"){
+        return res.status(403).send({message: "unauthorized"})
+      }
+
+      if(type === "users"){
+        const data = await users.find({role: "user"}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await users.countDocuments({role: "user"})
+
+        return res.send({data, totalDocuments})
+
+      }else if(type === "agents"){
+
+        const data = await users.find({role: "agent"}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await users.countDocuments({role: "agent"})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "transactions"){
+
+        const data = await transaction.find().skip(skip).limit(limit).toArray()
+        const totalDocuments = await transaction.countDocuments()
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_in"){
+
+        const data = await transaction.find({type: type}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await transaction.countDocuments({type: type})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_out"){
+
+        const data = await transaction.find({type: type}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await transaction.countDocuments({type: type})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "send_money"){
+
+        const data = await transaction.find({type: type}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await transaction.countDocuments({type: type})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_in_request"){
+
+        const data = await transaction.find({type: 'cash_in', status: 'pending'}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await transaction.countDocuments({type: 'cash_in', status: 'pending'})
+        return res.send({data, totalDocuments})
+
+      }else if(type === 'cash_out_request'){
+
+        const data = await transaction.find({type: 'cash_out', status: 'pending'}).skip(skip).limit(limit).toArray()
+        const totalDocuments = await transaction.countDocuments({type: 'cash_out', status: 'pending'})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_in_accept"){
+
+        const data = await transaction.find({type: 'cash_in', status: 'accept'}).toArray()
+        const totalDocuments = await transaction.countDocuments({type: 'cash_in', status: 'accept'})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_out_accept"){
+
+        const data = await transaction.find({type: 'cash_out', status: 'success'}).toArray()
+        const totalDocuments = await transaction.countDocuments({type: 'cash_out', status:'success'})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_in_reject"){
+
+        const data = await transaction.find({type: 'cash_in', status:'cancelled'}).toArray()
+        const totalDocuments = await transaction.countDocuments({type: 'cash_in', status:'cancelled'})
+        return res.send({data, totalDocuments})
+
+      }else if(type === "cash_out_reject"){
+
+        const data = await transaction.find({type: 'cash_out', status:'reject'}).toArray()
+        const totalDocuments = await transaction.countDocuments({type: 'cash_out', status:'reject'})
+        return res.send({data, totalDocuments})
+
+      }
+      
+    })
+
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
@@ -574,7 +664,7 @@ run().catch(console.dir);
 
 
 io.on('connection', (socket)=> {
-  console.log(socket)
+  
   console.log('connected user')
   socket.on('disconnect', () => {
     console.log('user disconnected')
