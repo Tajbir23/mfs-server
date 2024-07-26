@@ -15,14 +15,14 @@ const {Server} = require('socket.io');
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: ["http://localhost:5173", "http://localhost:4173"],
+    methods: ["GET", "POST"],
     
   },
 });
 
 app.use(cors({
-  origin: ["http://localhost:5173"],
+  origin: ["http://localhost:5173", "http://localhost:4173"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   
 }));
@@ -32,8 +32,8 @@ app.use(express.json());
 
 
 
-const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
-// const uri = "mongodb://localhost:27017"
+// const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
+const uri = "mongodb://localhost:27017"
 // const uri = "mongodb://tajbir:123@localhost:27017"
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -161,6 +161,7 @@ async function run() {
 
             const result = await users.insertOne(user);
 
+            
             const data = await getSystemMonitorData();
             io.emit('system_monitoring_update', data);
 
@@ -189,6 +190,7 @@ async function run() {
 
     app.post('/login', async (req, res) => {
       const {text, pin} = req.body
+      
       
       try {
         if(!text ||!pin){
