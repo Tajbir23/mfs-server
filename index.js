@@ -22,7 +22,7 @@ const io = new Server(server, {
 });
 
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app"],
+  origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app", "https://mfs-app-4e475.web.app"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   
 }));
