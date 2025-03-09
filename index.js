@@ -15,14 +15,16 @@ const {Server} = require('socket.io');
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app", "https://mfs-app-4e475.web.app"],
+    // origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app", "https://mfs-app-4e475.web.app", "http://192.168.1.10:5173"],
+    origin: "*",
     methods: ["GET", "POST"],
     
   },
 });
 
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app", "https://mfs-app-4e475.web.app"],
+  // origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app", "https://mfs-app-4e475.web.app", "http://192.168.1.10:5173"],
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE"],
   
 }));
@@ -32,8 +34,8 @@ app.use(express.json());
 
 
 
-const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
-// const uri = "mongodb://localhost:27017"
+// const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
+const uri = "mongodb://localhost:27017"
 // const uri = "mongodb://tajbir:123@localhost:27017"
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -114,28 +116,30 @@ async function run() {
             {
               $group: {
                 _id: null,
-                amount: {$sum: "$deducted"}
+                amount: { $sum: "$deducted" }
               }
-            }]).toArray()
-            const totalDeducted = totalDeductedResult[0].amount
-          
-            const data = {
-              totalUser,
-              totalAgent,
-              totalTransaction,
-              totalCashIn,
-              totalCashOut,
-              totalSendMoney,
-              totalCashInRequest,
-              totalCashOutRequest,
-              totalCashInAccept,
-              totalCashInReject,
-              totalCashOutReject,
-              totalCashOutSuccess,
-              totalSendMoneySuccess,
-              totalAmount,
-              totalDeducted
             }
+          ]).toArray();
+
+          const totalDeducted = totalDeductedResult.length > 0 ? totalDeductedResult[0].amount : 0;
+          
+          const data = {
+            totalUser,
+            totalAgent,
+            totalTransaction,
+            totalCashIn,
+            totalCashOut,
+            totalSendMoney,
+            totalCashInRequest,
+            totalCashOutRequest,
+            totalCashInAccept,
+            totalCashInReject,
+            totalCashOutReject,
+            totalCashOutSuccess,
+            totalSendMoneySuccess,
+            totalAmount,
+            totalDeducted
+          }
           return data
 
       } catch (error) {
@@ -146,7 +150,7 @@ async function run() {
     app.post('/signup', async(req, res) => {
         const { name, email, phone, pin, role } = req.body;
         
-
+        console.log(req.body)
         const user = { name, email, phone, role, status: 'pending', balance: 0 };
         try {
             const existingUser = await users.findOne({ role, $or: [{ email }, { phone }] });
@@ -576,7 +580,7 @@ async function run() {
       }
 
       const data = await getSystemMonitorData()
-      
+      console.log(data)
       res.send(data)
       io.emit('system_monitoring_update', data)
     })
