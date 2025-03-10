@@ -24,7 +24,7 @@ const io = new Server(server, {
 
 app.use(cors({
   origin: ["http://localhost:5173", "http://localhost:4173", "https://mfs-tajbir.web.app", "https://mfs-app-4e475.web.app", "http://192.168.1.10:5173", "http://pro-ft.gl.at.ply.gg:42850"],
-  origin: "*",
+  // origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE"],
   
 }));
