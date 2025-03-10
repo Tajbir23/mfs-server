@@ -35,7 +35,7 @@ app.use(express.json());
 
 
 // const uri = "mongodb+srv://tajbir:y6mcEooEI4Is8FCb@cluster0.sdyx3bs.mongodb.net/?appName=Cluster0";
-const uri = "mongodb://localhost:27017"
+const uri = process.env.mongodb_uri
 // const uri = "mongodb://tajbir:123@localhost:27017"
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -54,7 +54,7 @@ const verifyToken = async (req, res, next) => {
     return res.status(401).send({message: "unauthorized"})
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, process.env.jwt_secret, (err, decoded) => {
     if(err){
       return res.status(403).send({message: "unauthorized"})
     }
@@ -159,7 +159,7 @@ async function run() {
                 return res.status(400).send({ error: 'Phone or email already exists' });
             }
 
-            const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+            const hmac = crypto.createHmac('sha256', process.env.pin_secret);
             hmac.update(pin)
             const pin_hash = hmac.digest('hex');
             user.pin = pin_hash;
@@ -170,7 +170,7 @@ async function run() {
             const data = await getSystemMonitorData();
             io.emit('system_monitoring_update', data);
 
-            // const token = jwt.sign({ email, phone, role, status: 'pending' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+            // const token = jwt.sign({ email, phone, role, status: 'pending' }, process.env.jwt_secret, { expiresIn: '1h' });
             // res.send({ token, email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status, balance: user.balance });
             res.send({ message: "Registration successful" });
         } catch (error) {
@@ -201,7 +201,7 @@ async function run() {
         if(!text ||!pin){
           return res.status(400).send({error: 'Missing credentials'})
         }
-        const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+        const hmac = crypto.createHmac('sha256', process.env.pin_secret);
         hmac.update(pin)
         const pin_hash = hmac.digest('hex');
         
@@ -218,7 +218,7 @@ async function run() {
           return res.status(400).send({error: 'You have been blocked'})
         }
 
-        const token = jwt.sign({ email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ email: user.email, phone: user.phone, role: user.role, name: user.name, status: user.status }, process.env.jwt_secret, { expiresIn: '1h' });
         res.send({ token, role: user.role });
         } catch (error) {
           res.send(error.message)
@@ -349,7 +349,7 @@ async function run() {
       }
       
       try {
-        const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+        const hmac = crypto.createHmac('sha256', process.env.pin_secret);
         hmac.update(pin)
         const pin_hash = hmac.digest('hex');
 
@@ -492,7 +492,7 @@ async function run() {
       }
 
       try {
-        const hmac = crypto.createHmac('sha256', process.env.PIN_SECRET);
+        const hmac = crypto.createHmac('sha256', process.env.pin_secret);
         hmac.update(pin)
         const pin_hash = hmac.digest('hex');
 
@@ -692,6 +692,6 @@ io.on('connection', (socket)=> {
   });
 })
 
-server.listen(process.env.PORT || 5000, () => {
-  console.log(`Server is running on port ${process.env.PORT}`);
+server.listen(process.env.port || 5000, () => {
+  console.log(`Server is running on port ${process.env.port}`);
 });
